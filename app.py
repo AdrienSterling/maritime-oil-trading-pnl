@@ -144,172 +144,375 @@ with st.sidebar:
             'sale_price': 78.96
         }]
         st.session_state.hedge_trades = [{
-            'contract': 'GASOIL 500PPM Mo1',
+            'contract': 'GASOIL Mo1',
             'volume': -245778,
             'entry_price': 75.87,
             'exit_price': 81.98,
-            'expiry': '2019-03-01'
+            'expiry': '2019-03-01',
+            'status': 'Closed'
         }]
         st.rerun()
 
 # Main interface - Tabs
-tab1, tab2, tab3, tab4 = st.tabs(["📦 Physical Trading", "🛡️ Futures Hedging", "📊 P&L Analysis", "📈 Visualization"])
+tab1, tab2, tab3, tab4 = st.tabs(["💼 Trading Operations", "📊 P&L Analysis", "📈 Visualization", "📋 Records View"])
 
-# Physical trading tab
+# Trading operations tab - Combined physical trading and hedging
 with tab1:
-    st.markdown('<div class="input-section">', unsafe_allow_html=True)
-    st.markdown("### 📦 Physical Trading Records")
+    # Create sub-tabs for Buy and Sell operations
+    sub_tab1, sub_tab2 = st.tabs(["🟢 Buy Operations", "🔴 Sell Operations"])
     
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown("**Add New Trading Record**")
-    with col2:
-        if st.button("➕ Add Record", key="add_physical"):
-            st.session_state.show_physical_form = True
+    # Buy Operations Tab
+    with sub_tab1:
+        st.markdown('<div class="input-section">', unsafe_allow_html=True)
+        st.markdown("### 🟢 Buy Oil & Hedge Entry")
+        st.markdown("*Simultaneous purchase of physical oil and hedge position entry*")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown("**Add New Buy Operation**")
+        with col2:
+            if st.button("➕ Add Buy Operation", key="add_buy_op"):
+                st.session_state.show_buy_form = True
     
-    # Add trading record form
-    if st.session_state.get('show_physical_form', False):
-        with st.form("physical_trade_form"):
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                trade_date = st.date_input("Trade Date", value=datetime.now().date())
-            with col2:
-                quantity = st.number_input("Quantity (MT)", value=0.0, step=1000.0)
-            with col3:
-                buy_price = st.number_input("Buy Price ($/BBL)", value=0.0, step=0.01)
-            with col4:
-                sale_price = st.number_input("Sale Price ($/BBL)", value=0.0, step=0.01)
-            
-            col1, col2 = st.columns([1, 5])
-            with col1:
-                if st.form_submit_button("💾 Save"):
-                    if quantity != 0:
-                        new_trade = {
-                            'date': trade_date.strftime('%Y-%m-%d'),
-                            'quantity': quantity,
-                            'buy_price': buy_price,
-                            'sale_price': sale_price
-                        }
-                        st.session_state.physical_trades.append(new_trade)
-                        st.session_state.show_physical_form = False
-                        st.success("Trading record added!")
+        # Add buy operation form
+        if st.session_state.get('show_buy_form', False):
+            with st.form("buy_operation_form"):
+                st.markdown("**🛢️ Physical Oil Purchase**")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    buy_date = st.date_input("Purchase Date", value=datetime.now().date())
+                with col2:
+                    buy_quantity = st.number_input("Quantity (MT)", value=0.0, step=1000.0, key="buy_qty")
+                with col3:
+                    buy_price = st.number_input("Buy Price ($/BBL)", value=0.0, step=0.01)
+                
+                st.markdown("**🛡️ Hedge Position Entry (Optional)**")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    hedge_contract = st.selectbox(
+                        "Contract Type",
+                        ["None", "GASOIL Mo1", "GASOIL Mo2", "GASOIL Mo3", "Others"],
+                        key="buy_hedge_contract"
+                    )
+                with col2:
+                    hedge_volume = st.number_input("Hedge Volume (MT)", value=0.0, step=1000.0, key="buy_hedge_vol",
+                                                 help="Use negative for sell hedge")
+                with col3:
+                    hedge_entry_price = st.number_input("Entry Price ($/BBL)", value=0.0, step=0.01, key="buy_hedge_entry")
+                with col4:
+                    # 🔧 优化：hedge expiry默认使用buy date
+                    hedge_expiry = st.date_input("Expiry Date", value=buy_date, key="buy_hedge_expiry",
+                                                help="Defaults to purchase date")
+                
+                col1, col2 = st.columns([1, 5])
+                with col1:
+                    if st.form_submit_button("💾 Save Buy Operation"):
+                        if buy_quantity != 0:
+                            # Add physical trade record (incomplete - no sale price yet)
+                            new_trade = {
+                                'date': buy_date.strftime('%Y-%m-%d'),
+                                'quantity': buy_quantity,
+                                'buy_price': buy_price,
+                                'sale_price': 0.0  # To be filled in sell operation
+                            }
+                            st.session_state.physical_trades.append(new_trade)
+                            
+                            # Add hedge record if specified
+                            if hedge_contract != "None" and hedge_volume != 0:
+                                new_hedge = {
+                                    'contract': hedge_contract,
+                                    'volume': hedge_volume,
+                                    'entry_price': hedge_entry_price,
+                                    'exit_price': 0.0,  # To be filled in sell operation
+                                    'expiry': hedge_expiry.strftime('%Y-%m-%d'),
+                                    'status': 'Open'
+                                }
+                                st.session_state.hedge_trades.append(new_hedge)
+                            
+                            st.session_state.show_buy_form = False
+                            st.success("Buy operation added!")
+                            st.rerun()
+                with col2:
+                    if st.form_submit_button("❌ Cancel"):
+                        st.session_state.show_buy_form = False
                         st.rerun()
-            with col2:
-                if st.form_submit_button("❌ Cancel"):
-                    st.session_state.show_physical_form = False
-                    st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Display existing trading records
-    if st.session_state.physical_trades:
-        st.markdown("### 📋 Current Trading Records")
-        df_trades = pd.DataFrame(st.session_state.physical_trades)
         
-        # Add calculation columns
-        df_trades['Unit P&L'] = df_trades['sale_price'] - df_trades['buy_price']
-        df_trades['Total P&L'] = df_trades['Unit P&L'] * df_trades['quantity']
+        st.markdown('</div>', unsafe_allow_html=True)
         
-        # Format display
-        df_display = df_trades.copy()
-        df_display['Quantity (MT)'] = df_display['quantity'].apply(lambda x: f"{x:,.0f}")
-        df_display['Buy Price ($/BBL)'] = df_display['buy_price'].apply(lambda x: f"${x:.2f}")
-        df_display['Sale Price ($/BBL)'] = df_display['sale_price'].apply(lambda x: f"${x:.2f}")
-        df_display['Unit P&L ($/BBL)'] = df_display['Unit P&L'].apply(lambda x: f"${x:.2f}")
-        df_display['Total P&L ($)'] = df_display['Total P&L'].apply(lambda x: f"${x:,.2f}")
+        # 🔧 优化：显示pending operations with related hedge information
+        incomplete_trades = [trade for trade in st.session_state.physical_trades if trade['sale_price'] == 0.0]
+        open_hedges = [hedge for hedge in st.session_state.hedge_trades if hedge['status'] == 'Open']
         
-        st.dataframe(
-            df_display[['date', 'Quantity (MT)', 'Buy Price ($/BBL)', 'Sale Price ($/BBL)', 'Unit P&L ($/BBL)', 'Total P&L ($)']],
-            use_container_width=True
-        )
-        
-        if st.button("🗑️ Clear All Records", key="clear_physical"):
-            st.session_state.physical_trades = []
-            st.rerun()
-
-# Futures hedging tab
-with tab2:
-    st.markdown('<div class="input-section">', unsafe_allow_html=True)
-    st.markdown("### 🛡️ Futures Hedging Records")
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown("**Add New Hedge Record**")
-    with col2:
-        if st.button("➕ Add Hedge", key="add_hedge"):
-            st.session_state.show_hedge_form = True
-    
-    # Add hedge record form
-    if st.session_state.get('show_hedge_form', False):
-        with st.form("hedge_trade_form"):
+        if incomplete_trades or open_hedges:
+            st.markdown("### 📋 Current Pending Operations")
+            
             col1, col2 = st.columns(2)
             
             with col1:
-                contract = st.selectbox(
-                    "Contract Type",
-                    ["GASOIL 500PPM Mo1", "GASOIL 500PPM Mo2", "GASOIL 500PPM Mo3", "Others"]
-                )
-                volume = st.number_input("Hedge Volume (MT)", value=0.0, step=1000.0, 
-                                       help="Negative for sell hedge, positive for buy hedge")
-                entry_price = st.number_input("Entry Price ($/BBL)", value=0.0, step=0.01)
+                st.markdown("**🛢️ Pending Physical Trades**")
+                if incomplete_trades:
+                    df_incomplete = pd.DataFrame(incomplete_trades)
+                    
+                    # Add index for reference
+                    df_incomplete['ID'] = range(1, len(df_incomplete) + 1)
+                    
+                    # Format display
+                    df_display = df_incomplete.copy()
+                    df_display['Quantity (MT)'] = df_display['quantity'].apply(lambda x: f"{x:,.0f}")
+                    df_display['Buy Price ($/BBL)'] = df_display['buy_price'].apply(lambda x: f"${x:.2f}")
+                    df_display['Status'] = "Awaiting Sale"
+                    
+                    st.dataframe(
+                        df_display[['ID', 'date', 'Quantity (MT)', 'Buy Price ($/BBL)', 'Status']],
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No pending physical trades")
             
             with col2:
-                expiry_date = st.date_input("Expiry Date", value=datetime.now().date())
-                exit_price = st.number_input("Exit Price ($/BBL)", value=0.0, step=0.01)
-                status = st.selectbox("Status", ["Open", "Closed"])
+                st.markdown("**🛡️ Open Hedge Positions**")
+                if open_hedges:
+                    df_hedges = pd.DataFrame(open_hedges)
+                    
+                    # Add index for reference
+                    df_hedges['ID'] = range(1, len(df_hedges) + 1)
+                    
+                    # Format display
+                    df_display = df_hedges.copy()
+                    df_display['Volume (MT)'] = df_display['volume'].apply(lambda x: f"{x:,.0f}")
+                    df_display['Entry Price ($/BBL)'] = df_display['entry_price'].apply(lambda x: f"${x:.2f}")
+                    df_display['Type'] = df_display['volume'].apply(lambda x: "Sell Hedge" if x < 0 else "Buy Hedge")
+                    
+                    st.dataframe(
+                        df_display[['ID', 'contract', 'Volume (MT)', 'Entry Price ($/BBL)', 'Type', 'expiry']],
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No open hedge positions")
             
-            col1, col2 = st.columns([1, 5])
-            with col1:
-                if st.form_submit_button("💾 Save"):
-                    if volume != 0:
-                        new_hedge = {
-                            'contract': contract,
-                            'volume': volume,
-                            'entry_price': entry_price,
-                            'exit_price': exit_price,
-                            'expiry': expiry_date.strftime('%Y-%m-%d'),
-                            'status': status
-                        }
-                        st.session_state.hedge_trades.append(new_hedge)
-                        st.session_state.show_hedge_form = False
-                        st.success("Hedge record added!")
-                        st.rerun()
-            with col2:
-                if st.form_submit_button("❌ Cancel"):
-                    st.session_state.show_hedge_form = False
-                    st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Display existing hedge records
-    if st.session_state.hedge_trades:
-        st.markdown("### 📋 Current Hedge Records")
-        df_hedges = pd.DataFrame(st.session_state.hedge_trades)
-        
-        # Add calculation columns
-        df_hedges['Unit P&L'] = df_hedges['exit_price'] - df_hedges['entry_price']
-        df_hedges['Total P&L'] = df_hedges['Unit P&L'] * df_hedges['volume']
-        
-        # Format display
-        df_display = df_hedges.copy()
-        df_display['Volume (MT)'] = df_display['volume'].apply(lambda x: f"{x:,.0f}")
-        df_display['Entry Price ($/BBL)'] = df_display['entry_price'].apply(lambda x: f"${x:.2f}")
-        df_display['Exit Price ($/BBL)'] = df_display['exit_price'].apply(lambda x: f"${x:.2f}")
-        df_display['Unit P&L ($/BBL)'] = df_display['Unit P&L'].apply(lambda x: f"${x:.2f}")
-        df_display['Total P&L ($)'] = df_display['Total P&L'].apply(lambda x: f"${x:,.2f}")
-        
-        st.dataframe(
-            df_display[['contract', 'Volume (MT)', 'Entry Price ($/BBL)', 'Exit Price ($/BBL)', 'Unit P&L ($/BBL)', 'Total P&L ($)', 'expiry', 'status']],
-            use_container_width=True
-        )
-        
-        if st.button("🗑️ Clear All Records", key="clear_hedge"):
-            st.session_state.hedge_trades = []
-            st.rerun()
+            # Summary section
+            if incomplete_trades and open_hedges:
+                st.markdown("#### 📊 Operations Summary")
+                total_physical_volume = sum(trade['quantity'] for trade in incomplete_trades)
+                total_hedge_volume = sum(abs(hedge['volume']) for hedge in open_hedges)
+                hedge_ratio = (total_hedge_volume / total_physical_volume * 100) if total_physical_volume > 0 else 0
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Physical Volume", f"{total_physical_volume:,.0f} MT")
+                with col2:
+                    st.metric("Total Hedge Volume", f"{total_hedge_volume:,.0f} MT")
+                with col3:
+                    st.metric("Hedge Ratio", f"{hedge_ratio:.1f}%")
 
-# P&L analysis tab
-with tab3:
+    # Sell Operations Tab
+    with sub_tab2:
+        st.markdown('<div class="input-section">', unsafe_allow_html=True)
+        st.markdown("### 🔴 Sell Oil & Hedge Exit")
+        st.markdown("*Complete the trading cycle by selling physical oil and closing hedge positions*")
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown("**Add New Sell Operation**")
+        with col2:
+            if st.button("➕ Add Sell Operation", key="add_sell_op"):
+                st.session_state.show_sell_form = True
+        
+        # Add sell operation form
+        if st.session_state.get('show_sell_form', False):
+            with st.form("sell_operation_form"):
+                st.markdown("**🛢️ Physical Oil Sale**")
+                
+                # Show available incomplete trades
+                incomplete_trades = [(i, trade) for i, trade in enumerate(st.session_state.physical_trades) if trade['sale_price'] == 0.0]
+                if incomplete_trades:
+                    trade_options = [f"Trade {i}: {trade['date']} - {trade['quantity']:,.0f} MT at ${trade['buy_price']:.2f}" 
+                                   for i, trade in incomplete_trades]
+                    selected_trade_idx = st.selectbox("Select Trade to Complete", range(len(trade_options)), 
+                                                     format_func=lambda x: trade_options[x])
+                    selected_trade_original_idx = incomplete_trades[selected_trade_idx][0]
+                    selected_trade = incomplete_trades[selected_trade_idx][1]
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        sale_date = st.date_input("Sale Date", value=datetime.now().date())
+                        st.write(f"Quantity: {selected_trade['quantity']:,.0f} MT")
+                        st.write(f"Buy Price: ${selected_trade['buy_price']:.2f}/BBL")
+                    with col2:
+                        sale_price = st.number_input("Sale Price ($/BBL)", value=0.0, step=0.01)
+                        estimated_pnl = (sale_price - selected_trade['buy_price']) * selected_trade['quantity']
+                        st.write(f"Estimated P&L: ${estimated_pnl:,.2f}")
+                else:
+                    st.warning("No pending buy operations to complete. Please add a buy operation first.")
+                    selected_trade_original_idx = None
+                
+                # Hedge exit section
+                st.markdown("**🛡️ Hedge Position Exit (Optional)**")
+                open_hedges = [(i, hedge) for i, hedge in enumerate(st.session_state.hedge_trades) if hedge['status'] == 'Open']
+                
+                # Initialize variables
+                selected_hedge_original_idx = None
+                selected_hedge = None
+                hedge_exit_price = 0.0
+                
+                if open_hedges:
+                    # 🔧 修复：正确解构open_hedges元组
+                    hedge_options = [f"ID {orig_idx+1}: {hedge['contract']} | {hedge['volume']:,.0f} MT | Entry: ${hedge['entry_price']:.2f} | Exp: {hedge['expiry']}" 
+                                   for orig_idx, hedge in open_hedges]
+                    hedge_options.insert(0, "None - Don't close any hedge")
+                    selected_hedge_idx = st.selectbox("Select Hedge to Close", range(len(hedge_options)), 
+                                                    format_func=lambda x: hedge_options[x])
+                    
+                    if selected_hedge_idx > 0:  # Not "None"
+                        selected_hedge_original_idx = open_hedges[selected_hedge_idx - 1][0]
+                        selected_hedge = open_hedges[selected_hedge_idx - 1][1]
+                        
+                        # 🔧 优化：使用更突出的界面设计来激活hedge退出功能
+                        st.markdown("---")
+                        st.markdown("### 🎯 **Hedge Exit Activated**")
+                        st.markdown("*You have selected a hedge position to close. Please enter exit price below.*")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("**📋 Selected Hedge Details:**")
+                            st.info(f"""
+                            **Contract:** {selected_hedge['contract']}  
+                            **Volume:** {selected_hedge['volume']:,.0f} MT  
+                            **Entry Price:** ${selected_hedge['entry_price']:.2f}/BBL  
+                            **Expiry:** {selected_hedge['expiry']}
+                            """)
+                        
+                        with col2:
+                            st.markdown("**💰 Exit Price Input:**")
+                            # 🔧 修复：不使用自动默认值，要求用户主动输入
+                            st.write(f"**Reference Entry Price:** ${selected_hedge['entry_price']:.2f}/BBL")
+                            hedge_exit_price = st.number_input(
+                                "Exit Price ($/BBL)", 
+                                value=0.0,  # 修复：使用0.0强制用户输入实际退出价格
+                                step=0.01, 
+                                key="hedge_exit",
+                                help="Enter the actual market price at which you want to exit this hedge position"
+                            )
+                            
+                            # 实时显示P&L计算
+                            hedge_pnl = (hedge_exit_price - selected_hedge['entry_price']) * selected_hedge['volume']
+                            hedge_type = "Sell Hedge" if selected_hedge['volume'] < 0 else "Buy Hedge"
+                            
+                            # 🔧 优化：使用颜色编码显示盈亏
+                            if hedge_pnl > 0:
+                                st.success(f"**Projected Profit:** ${hedge_pnl:,.2f}")
+                            elif hedge_pnl < 0:
+                                st.error(f"**Projected Loss:** ${hedge_pnl:,.2f}")
+                            else:
+                                st.info(f"**Break Even:** ${hedge_pnl:,.2f}")
+                            
+                            st.write(f"**Hedge Type:** {hedge_type}")
+                            
+                        # 🔧 优化：显示综合操作状态和P&L预览
+                        st.markdown("---")
+                        st.markdown("### 📊 **Combined Operation Preview**")
+                        
+                        # 计算individual P&Ls
+                        physical_pnl_preview = 0
+                        hedge_pnl_preview = 0
+                        
+                        if incomplete_trades and selected_trade_original_idx is not None and sale_price > 0:
+                            selected_trade = incomplete_trades[selected_trade_idx][1]
+                            physical_pnl_preview = (sale_price - selected_trade['buy_price']) * selected_trade['quantity']
+                        
+                        if hedge_exit_price > 0:
+                            hedge_pnl_preview = (hedge_exit_price - selected_hedge['entry_price']) * selected_hedge['volume']
+                        
+                        combined_pnl = physical_pnl_preview + hedge_pnl_preview
+                        
+                        # 显示P&L预览
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            if physical_pnl_preview != 0:
+                                color = "🟢" if physical_pnl_preview > 0 else "🔴"
+                                st.metric("Physical P&L", f"${physical_pnl_preview:,.2f}", delta=None)
+                            else:
+                                st.metric("Physical P&L", "Not calculated", delta=None)
+                        
+                        with col2:
+                            if hedge_pnl_preview != 0:
+                                color = "🟢" if hedge_pnl_preview > 0 else "🔴"
+                                st.metric("Hedge P&L", f"${hedge_pnl_preview:,.2f}", delta=None)
+                            else:
+                                st.metric("Hedge P&L", "Not calculated", delta=None)
+                        
+                        with col3:
+                            if physical_pnl_preview != 0 or hedge_pnl_preview != 0:
+                                color = "🟢" if combined_pnl > 0 else "🔴"
+                                st.metric("Combined P&L", f"${combined_pnl:,.2f}", delta=None)
+                            else:
+                                st.metric("Combined P&L", "Enter prices", delta=None)
+                        
+                        # 操作状态提示
+                        if hedge_exit_price > 0:
+                            if hedge_exit_price != selected_hedge['entry_price']:
+                                st.success("✅ **Hedge exit price entered!** Ready to execute combined operation.")
+                            else:
+                                st.warning("⚠️ Exit price equals entry price (break even). Confirm if this is intended.")
+                        else:
+                            st.info("💡 **Enter hedge exit price above to see complete P&L preview.**")
+                    else:
+                        selected_hedge_original_idx = None
+                        hedge_exit_price = 0.0
+                else:
+                    st.info("💡 No open hedge positions to close. Add hedge positions in Buy Operations first.")
+                
+                col1, col2 = st.columns([1, 5])
+                with col1:
+                    if st.form_submit_button("💾 Complete Sale"):
+                        # Check if we have physical trade to complete
+                        has_physical_to_complete = incomplete_trades and selected_trade_original_idx is not None and sale_price > 0
+                        
+                        # Check if we have hedge to close
+                        has_hedge_to_close = selected_hedge_original_idx is not None and hedge_exit_price > 0
+                        
+                        # Check if user selected a hedge but didn't enter exit price
+                        hedge_selected_but_no_price = (selected_hedge_original_idx is not None and hedge_exit_price <= 0)
+                        
+                        # Validate operations
+                        if hedge_selected_but_no_price:
+                            st.error("⚠️ You have selected a hedge position to close but haven't entered an exit price. Please enter the hedge exit price or select 'None' if you don't want to close any hedge position.")
+                        elif has_physical_to_complete or has_hedge_to_close:
+                            operation_completed = []
+                            
+                            # Complete physical trade if available
+                            if has_physical_to_complete:
+                                st.session_state.physical_trades[selected_trade_original_idx]['sale_price'] = sale_price
+                                operation_completed.append("Physical sale")
+                            
+                            # Close hedge if selected
+                            if has_hedge_to_close:
+                                st.session_state.hedge_trades[selected_hedge_original_idx]['exit_price'] = hedge_exit_price
+                                st.session_state.hedge_trades[selected_hedge_original_idx]['status'] = 'Closed'
+                                operation_completed.append("Hedge position closed")
+                            
+                            st.session_state.show_sell_form = False
+                            success_msg = " and ".join(operation_completed) + " completed!"
+                            st.success(success_msg)
+                            st.rerun()
+                        else:
+                            if not incomplete_trades:
+                                st.error("No pending physical trades to complete and no hedge positions selected to close.")
+                            elif selected_hedge_original_idx is None:
+                                st.error("Please select a physical trade to complete or a hedge position to close.")
+                            else:
+                                st.error("Please complete all required fields (sale price and/or hedge exit price).")
+                with col2:
+                    if st.form_submit_button("❌ Cancel"):
+                        st.session_state.show_sell_form = False
+                        st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# P&L analysis tab  
+with tab2:
     st.markdown('<div class="result-section">', unsafe_allow_html=True)
     st.markdown("### 📊 P&L Analysis Results")
     
@@ -392,7 +595,7 @@ with tab3:
                 st.write(f"- Hedge Ratio: {abs(total_hedge_volume/total_quantity)*100:.1f}%" if total_quantity != 0 else "- Hedge Ratio: 0%")
 
 # Visualization tab
-with tab4:
+with tab3:
     st.markdown("### 📈 P&L Visualization")
     
     if st.session_state.physical_trades or st.session_state.hedge_trades:
@@ -456,11 +659,87 @@ with tab4:
     else:
         st.info("📝 Please add trading data to view visualization charts")
 
+# Records view tab
+with tab4:
+    st.markdown("### 📋 Complete Records View")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 📦 Physical Trading Records")
+        if st.session_state.physical_trades:
+            df_trades = pd.DataFrame(st.session_state.physical_trades)
+            
+            # Add calculation columns
+            df_trades['Unit P&L'] = df_trades['sale_price'] - df_trades['buy_price']
+            df_trades['Total P&L'] = df_trades['Unit P&L'] * df_trades['quantity']
+            df_trades['Status'] = df_trades['sale_price'].apply(lambda x: 'Completed' if x > 0 else 'Pending')
+            
+            # Format display
+            df_display = df_trades.copy()
+            df_display['Quantity (MT)'] = df_display['quantity'].apply(lambda x: f"{x:,.0f}")
+            df_display['Buy Price ($/BBL)'] = df_display['buy_price'].apply(lambda x: f"${x:.2f}")
+            df_display['Sale Price ($/BBL)'] = df_display['sale_price'].apply(lambda x: f"${x:.2f}" if x > 0 else "Pending")
+            df_display['Unit P&L ($/BBL)'] = df_display['Unit P&L'].apply(lambda x: f"${x:.2f}" if x != 0 else "-")
+            df_display['Total P&L ($)'] = df_display['Total P&L'].apply(lambda x: f"${x:,.2f}" if x != 0 else "-")
+            
+            st.dataframe(
+                df_display[['date', 'Quantity (MT)', 'Buy Price ($/BBL)', 'Sale Price ($/BBL)', 'Unit P&L ($/BBL)', 'Total P&L ($)', 'Status']],
+                use_container_width=True
+            )
+            
+            if st.button("🗑️ Clear Physical Records", key="clear_physical_records"):
+                st.session_state.physical_trades = []
+                st.rerun()
+        else:
+            st.info("No physical trading records yet.")
+    
+    with col2:
+        st.markdown("#### 🛡️ Hedge Trading Records")
+        if st.session_state.hedge_trades:
+            df_hedges = pd.DataFrame(st.session_state.hedge_trades)
+            
+            # Add calculation columns
+            df_hedges['Unit P&L'] = df_hedges['exit_price'] - df_hedges['entry_price']
+            df_hedges['Total P&L'] = df_hedges['Unit P&L'] * df_hedges['volume']
+            
+            # Format display
+            df_display = df_hedges.copy()
+            df_display['Volume (MT)'] = df_display['volume'].apply(lambda x: f"{x:,.0f}")
+            df_display['Entry Price ($/BBL)'] = df_display['entry_price'].apply(lambda x: f"${x:.2f}")
+            
+            # Improved Exit Price display logic - use status as primary indicator
+            def format_exit_price(row):
+                if row.get('status', 'Open') == 'Closed' and row['exit_price'] > 0:
+                    return f"${row['exit_price']:.2f}"
+                elif row.get('status', 'Open') == 'Open':
+                    return "Open" if row['exit_price'] == 0 else f"${row['exit_price']:.2f}"
+                else:
+                    # Handle inconsistent data
+                    return f"${row['exit_price']:.2f}" if row['exit_price'] > 0 else "Pending"
+            
+            df_display['Exit Price ($/BBL)'] = df_hedges.apply(format_exit_price, axis=1)
+            df_display['Unit P&L ($/BBL)'] = df_display['Unit P&L'].apply(lambda x: f"${x:.2f}" if x != 0 else "-")
+            df_display['Total P&L ($)'] = df_display['Total P&L'].apply(lambda x: f"${x:,.2f}" if x != 0 else "-")
+            
+            st.dataframe(
+                df_display[['contract', 'Volume (MT)', 'Entry Price ($/BBL)', 'Exit Price ($/BBL)', 'Unit P&L ($/BBL)', 'Total P&L ($)', 'expiry', 'status']],
+                use_container_width=True
+            )
+            
+            if st.button("🗑️ Clear Hedge Records", key="clear_hedge_records"):
+                st.session_state.hedge_trades = []
+                st.rerun()
+        else:
+            st.info("No hedge trading records yet.")
+
 # Footer
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #6b7280;'>"
-    "🚢 Maritime Oil Trading P&L Analysis System | Professional POC"
+    "🚢 Maritime Oil Trading P&L Analysis System | "
+    "<a href='https://www.abcdteck.com' target='_blank' style='color: #3b82f6; text-decoration: none;'>ABCD Teck</a> | "
+    "CL Risk Consulting"
     "</div>",
     unsafe_allow_html=True
 )

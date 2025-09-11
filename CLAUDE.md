@@ -36,10 +36,12 @@ pip install streamlit pandas numpy plotly openpyxl
 ### Core Components
 
 **app.py** - Main Streamlit application with 4-tab architecture:
-- **Physical Trading Tab**: Multi-record input for oil purchase/sale transactions
-- **Futures Hedging Tab**: Contract management for risk mitigation 
+- **Trading Operations Tab**: Combined physical and hedge operations with sub-tabs for buy/sell workflows
+  - **Buy Operations Sub-tab**: Simultaneous physical oil purchase and hedge position entry with pending operations dashboard
+  - **Sell Operations Sub-tab**: Complete trading cycle with physical oil sale and hedge exit with enhanced selection UI
 - **P&L Analysis Tab**: Real-time calculations with professional metrics display
-- **Visualization Tab**: Interactive charts and time series analysis
+- **Visualization Tab**: Interactive charts and time series analysis  
+- **Records View Tab**: Complete trading and hedge records with improved status tracking
 
 **Session State Management**: Uses `st.session_state` to persist:
 - `physical_trades[]` - List of physical trading records
@@ -105,7 +107,10 @@ This system was built to **exactly replicate** an existing Excel workbook (`AL B
 
 **Session State Management**: Always check for key existence before accessing `st.session_state` collections. The app initializes empty lists for trades/hedges.
 
-**Form Handling**: Dynamic forms use session state flags (e.g., `show_physical_form`) to control visibility. Forms are submitted with unique keys to prevent conflicts.
+**Form Handling**: Dynamic forms use session state flags (e.g., `show_buy_form`, `show_sell_form`) to control visibility. The new workflow design supports:
+- **Incomplete Trades**: Physical trades with sale_price = 0.0 represent pending operations
+- **Open Hedges**: Hedge positions with status = 'Open' and exit_price = 0.0 represent active positions
+- **Workflow Continuity**: Buy operations create pending records that are completed in sell operations
 
 **Calculation Updates**: Any changes to the P&L calculation logic MUST be validated against `test_validation.py` to ensure Excel compatibility.
 

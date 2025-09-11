@@ -31,19 +31,33 @@ Open your browser to: http://localhost:8501
 ### Load Sample Data
 Click "📊 Load Sample Data" in the sidebar to populate with the GO-KAKI STAR example.
 
-### Add Physical Trades
-1. Go to "📦 Physical Trading" tab
-2. Click "➕ Add Record"
-3. Enter trade details (date, quantity, buy/sale prices)
+### Trading Operations Workflow
+1. Go to "💼 Trading Operations" tab
 
-### Add Hedge Positions
-1. Go to "🛡️ Futures Hedging" tab  
-2. Click "➕ Add Hedge"
-3. Enter contract details (type, volume, entry/exit prices)
+#### Buy Operations
+1. Select "🟢 Buy Operations" sub-tab
+2. View current pending operations and open hedge positions
+3. Click "➕ Add Buy Operation"
+4. Enter physical oil purchase details (date, quantity, buy price)
+5. Optionally add simultaneous hedge position entry (expiry defaults to purchase date)
+6. Save to create pending operation
+7. Monitor hedge ratio and operations summary
+
+#### Sell Operations  
+1. Select "🔴 Sell Operations" sub-tab
+2. Click "➕ Add Sell Operation" 
+3. Select pending buy operation to complete
+4. Enter sale price and date
+5. **Hedge Exit Feature**: Select hedge position to close from dropdown
+   - When hedge is selected, "Hedge Exit Activated" menu appears automatically
+   - Enter exit price for the selected hedge position
+   - System validates that exit price is provided when hedge is selected
+6. Complete the trading cycle with proper validation
 
 ### View Analysis
 1. Go to "📊 P&L Analysis" tab to see calculated results
 2. Go to "📈 Visualization" tab for charts and trends
+3. Go to "📋 Records View" tab for complete trade history
 
 ## Calculation Methods
 
@@ -65,6 +79,7 @@ python test_validation.py
 ✅ **Real-time Updates**: Instant calculations as you input data  
 ✅ **Multi-platform**: Works on Windows, Mac, and Linux  
 ✅ **No Installation**: Web-based, no complex setup required  
+✅ **Robust Validation**: Enhanced hedge exit validation prevents data entry errors  
 
 ## Technical Details
 
