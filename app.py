@@ -4,45 +4,34 @@ import numpy as np
 from datetime import datetime, date
 import plotly.graph_objects as go
 import plotly.express as px
-
-
-PRODUCT_CATALOG = {
-    "Crude Oil": [
-        "Dubai",
-        "Oman",
-        "Murban (Abu Dhabi)",
-        "Basrah Light (Iraq)",
-        "Basrah Heavy (Iraq)",
-        "Arab Light (Saudi Arabia)",
-        "Arab Heavy (Saudi Arabia)",
-        "Kirkuk (Iraq)",
-        "ESPO"
-    ],
-    "Refined Products": [
-        "Gasoline",
-        "Diesel / Gasoil (10 ppm)",
-        "Diesel / Gasoil (500 ppm)",
-        "Jet Fuel / Aviation Kerosene",
-        "Naphtha",
-        "Fuel Oil (HSFO)",
-        "Fuel Oil (VLSFO)",
-        "Marine Gas Oil (MGO)",
-        "Bitumen / Asphalt"
-    ],
-    "Gas / LNG / LPG": [
-        "LNG",
-        "LPG - Propane",
-        "LPG - Butane",
-        "Condensate"
-    ],
-    "Optional / Custom": [
-        "Petchem Feedstocks",
-        "Other Crude / Custom Product"
-    ]
-}
+from pathlib import Path
+import io
 
 
 # Page configuration
+
+BASE_DIR = Path(__file__).resolve().parent
+
+PLATTS_PRODUCT_CATALOG = {
+    'MOPAG': [
+        '180 CST AG MOPAG',
+        '380 CST AG MOPAG',
+        'GASOIL 2500PPM MOPAG',
+        'GASOIL 500PPM MOPAG',
+        'GASOIL 10PPM MOPAG',
+        'NAPHTHA MOPAG'
+    ],
+    'MOPS': [
+        '180 CST SPOR MOPS',
+        '380 CST SPOR MOPS',
+        'GAS OIL2500PPM MOPS',
+        'GASOIL 500PPM MOPS',
+        'GASOIL 10PPM MOPS',
+        'GASOLINE 92 MOPS',
+        'GASOLINE 95 MOPS'
+    ]
+}
+
 
 # Page configuration
 st.set_page_config(
@@ -146,11 +135,282 @@ def calculate_pnl(physical_trades, hedge_trades):
     
     return physical_pnl, hedge_pnl, net_pnl
 
+
+
+def standardize_market_price_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame(columns=['date', 'instrument', 'price', 'type'])
+
+    df = df.copy()
+    df.columns = [str(c).strip().lower() for c in df.columns]
+
+    column_map = {
+        'date': ['date', 'valuation_date', 'pricing_date'],
+        'instrument': ['instrument', 'product', 'contract', 'name'],
+        'price': ['price', 'market_price', 'settlement', 'value'],
+        'type': ['type', 'category', 'instrument_type']
+    }
+
+    resolved = {}
+    for canonical, aliases in column_map.items():
+        for alias in aliases:
+            if alias in df.columns:
+                resolved[canonical] = alias
+                break
+
+    missing_required = [key for key in ['date', 'instrument', 'price'] if key not in resolved]
+    if missing_required:
+        raise ValueError(f"Missing required columns: {', '.join(missing_required)}")
+
+    rename_map = {resolved['date']: 'date', resolved['instrument']: 'instrument', resolved['price']: 'price'}
+    if 'type' in resolved:
+        rename_map[resolved['type']] = 'type'
+
+    df = df.rename(columns=rename_map)
+    if 'type' not in df.columns:
+        df['type'] = ''
+    return df[['date', 'instrument', 'price', 'type']]
+
+
+def normalize_market_price_df(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame(columns=['date', 'instrument', 'price', 'type', 'instrument_key'])
+
+    df = standardize_market_price_columns(df)
+    df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.normalize()
+    df['instrument'] = df['instrument'].astype(str).str.strip()
+    df['price'] = pd.to_numeric(df['price'], errors='coerce')
+    df['type'] = df['type'].fillna('').astype(str).str.strip()
+    df = df.dropna(subset=['date', 'instrument'])
+    df = df[df['instrument'] != '']
+    df = df.dropna(subset=['price'])
+    df['instrument_key'] = df['instrument'].str.lower().str.strip()
+    df = df.sort_values(['date', 'instrument_key']).reset_index(drop=True)
+    return df
+
+
+def get_market_price_df() -> pd.DataFrame:
+    data = st.session_state.get('market_prices', [])
+    if isinstance(data, pd.DataFrame):
+        df = normalize_market_price_df(data)
+    else:
+        df = normalize_market_price_df(pd.DataFrame(data))
+    return df
+
+
+def save_market_price_df(df: pd.DataFrame) -> None:
+    normalized = normalize_market_price_df(df)
+    if normalized.empty:
+        st.session_state.market_prices = []
+        return
+
+    to_store = normalized.drop(columns=['instrument_key'])
+    to_store['date'] = to_store['date'].dt.strftime('%Y-%m-%d')
+    st.session_state.market_prices = to_store.to_dict(orient='records')
+
+
+def lookup_market_price(prices_df: pd.DataFrame, instrument_name: str, valuation_date: pd.Timestamp):
+    if prices_df.empty or not instrument_name:
+        return None
+
+    key = str(instrument_name).strip().lower()
+    if not key:
+        return None
+
+    valuation_date = pd.to_datetime(valuation_date).normalize()
+    subset = prices_df[(prices_df['instrument_key'] == key) & (prices_df['date'] == valuation_date)]
+    if subset.empty:
+        return None
+    return subset.iloc[-1]['price']
+
+
+def evaluate_market_pnl_for_date(prices_df: pd.DataFrame, physical_trades, hedge_trades, valuation_date):
+    valuation_date = pd.to_datetime(valuation_date).normalize()
+
+    physical_rows = []
+    hedge_rows = []
+    physical_pnl = 0.0
+    hedge_pnl = 0.0
+    missing_instruments = set()
+
+    for idx, trade in enumerate(physical_trades, start=1):
+        quantity = trade.get('quantity', 0) or 0
+        if quantity == 0:
+            continue
+
+        buy_date = trade.get('date')
+        if buy_date:
+            try:
+                buy_date = pd.to_datetime(buy_date).normalize()
+                if buy_date > valuation_date:
+                    continue
+            except Exception:
+                buy_date = None
+
+        sale_date = trade.get('sale_date') or ''
+        if sale_date:
+            try:
+                sale_date = pd.to_datetime(sale_date).normalize()
+            except Exception:
+                sale_date = None
+        else:
+            sale_date = None
+
+        status = 'Open'
+        if sale_date and sale_date <= valuation_date:
+            status = 'Closed'
+
+        product_name = trade.get('product_name') or trade.get('product') or st.session_state.get('selected_product_name', '')
+        net_buy_price = (trade.get('buy_price', 0.0) or 0.0) + (trade.get('buy_premium_discount', 0.0) or 0.0)
+        market_price = lookup_market_price(prices_df, product_name, valuation_date)
+        pnl_value = np.nan
+
+        if status == 'Open':
+            if market_price is not None:
+                pnl_value = (market_price - net_buy_price) * quantity
+                physical_pnl += pnl_value
+            else:
+                missing_instruments.add(product_name or 'Physical Product')
+        else:
+            pnl_value = 0.0
+
+        physical_rows.append({
+            'Trade #': idx,
+            'Instrument': product_name or 'N/A',
+            'Status': status,
+            'Quantity (MT)': quantity,
+            'Net Buy Price ($/BBL)': net_buy_price,
+            'Market Price ($/BBL)': market_price,
+            'P&L ($)': pnl_value
+        })
+
+    for idx, hedge in enumerate(hedge_trades, start=1):
+        volume = hedge.get('volume', 0) or 0
+        if volume == 0:
+            continue
+
+        trade_date = hedge.get('trade_date')
+        if trade_date:
+            try:
+                trade_date = pd.to_datetime(trade_date).normalize()
+                if trade_date > valuation_date:
+                    continue
+            except Exception:
+                trade_date = None
+
+        exit_date = hedge.get('exit_date') or ''
+        if exit_date:
+            try:
+                exit_date = pd.to_datetime(exit_date).normalize()
+            except Exception:
+                exit_date = None
+        else:
+            exit_date = None
+
+        status = hedge.get('status', 'Open')
+        if exit_date and exit_date <= valuation_date:
+            status = 'Closed'
+
+        contract_name = hedge.get('contract') or 'Hedge Instrument'
+        entry_price = hedge.get('entry_price', 0.0) or 0.0
+        market_price = lookup_market_price(prices_df, contract_name, valuation_date)
+        pnl_value = np.nan
+
+        if status == 'Open':
+            if market_price is not None:
+                pnl_value = (market_price - entry_price) * volume
+                hedge_pnl += pnl_value
+            else:
+                missing_instruments.add(contract_name)
+        else:
+            pnl_value = 0.0
+
+        hedge_rows.append({
+            'Hedge #': idx,
+            'Instrument': contract_name,
+            'Status': status,
+            'Volume': volume,
+            'Entry Price ($/BBL)': entry_price,
+            'Market Price ($/BBL)': market_price,
+            'P&L ($)': pnl_value
+        })
+
+    physical_df = pd.DataFrame(physical_rows) if physical_rows else pd.DataFrame(columns=['Trade #', 'Instrument', 'Status', 'Quantity (MT)', 'Net Buy Price ($/BBL)', 'Market Price ($/BBL)', 'P&L ($)'])
+    hedge_df = pd.DataFrame(hedge_rows) if hedge_rows else pd.DataFrame(columns=['Hedge #', 'Instrument', 'Status', 'Volume', 'Entry Price ($/BBL)', 'Market Price ($/BBL)', 'P&L ($)'])
+
+    return {
+        'valuation_date': valuation_date,
+        'physical_pnl': float(physical_pnl),
+        'hedge_pnl': float(hedge_pnl),
+        'net_pnl': float(physical_pnl + hedge_pnl),
+        'physical_details': physical_df,
+        'hedge_details': hedge_df,
+        'missing_instruments': sorted({m for m in missing_instruments if m})
+    }
+
+
+def calculate_market_pnl_series(prices_df: pd.DataFrame, physical_trades, hedge_trades) -> pd.DataFrame:
+    if prices_df.empty:
+        return pd.DataFrame(columns=['date', 'physical_pnl', 'hedge_pnl', 'net_pnl'])
+
+    results = []
+    for valuation_date in sorted(prices_df['date'].dropna().unique()):
+        pnl_snapshot = evaluate_market_pnl_for_date(prices_df, physical_trades, hedge_trades, valuation_date)
+        results.append({
+            'date': pd.to_datetime(valuation_date),
+            'physical_pnl': pnl_snapshot['physical_pnl'],
+            'hedge_pnl': pnl_snapshot['hedge_pnl'],
+            'net_pnl': pnl_snapshot['net_pnl']
+        })
+
+    return pd.DataFrame(results)
+
+
+def build_price_history(prices_df: pd.DataFrame, instruments) -> pd.DataFrame:
+    if prices_df.empty or not instruments:
+        return pd.DataFrame()
+
+    instrument_keys = {str(instr).strip().lower() for instr in instruments if instr}
+    if not instrument_keys:
+        return pd.DataFrame()
+
+    subset = prices_df[prices_df['instrument_key'].isin(instrument_keys)]
+    if subset.empty:
+        return pd.DataFrame()
+
+    pivot = (subset.pivot_table(index='date', columns='instrument', values='price', aggfunc='last')
+                    .sort_index())
+    pivot = pivot.reset_index()
+    return pivot
+
+
+
+
+
+
 # Initialize session state
 if 'physical_trades' not in st.session_state:
     st.session_state.physical_trades = []
 if 'hedge_trades' not in st.session_state:
     st.session_state.hedge_trades = []
+
+for trade in st.session_state.physical_trades:
+    trade.setdefault('buy_premium_discount', 0.0)
+    trade.setdefault('sale_premium_discount', 0.0)
+    trade.setdefault('sale_date', '')
+    trade.setdefault('product_name', st.session_state.get('selected_product_name', ''))
+    trade.setdefault('product_category', st.session_state.get('selected_product_category', ''))
+
+for hedge in st.session_state.hedge_trades:
+    hedge.setdefault('exit_date', '')
+
+if 'market_prices' not in st.session_state:
+    st.session_state.market_prices = []
+
+if 'selected_product_category' not in st.session_state:
+    st.session_state.selected_product_category = ''
+if 'selected_product_name' not in st.session_state:
+    st.session_state.selected_product_name = ''
 
 # Sidebar - Basic Information
 with st.sidebar:
@@ -170,37 +430,58 @@ with st.sidebar:
     st.session_state.delivery_point = delivery_point
 
 
-    product_category = st.selectbox(
-        "Product Category",
-        list(PRODUCT_CATALOG.keys()),
-        help="Select the broader commodity family"
-    )
+    product_catalog = {category: items[:] for category, items in PLATTS_PRODUCT_CATALOG.items()}
+    categories = sorted(product_catalog.keys())
+    previous_category = st.session_state.get("selected_product_category")
 
-    product_options = PRODUCT_CATALOG[product_category]
-
-    product_selection = st.selectbox(
-        "Product",
-        product_options,
-        help="Choose the specific product within the selected category"
-    )
-
-    custom_product_name = ""
-    if product_selection == "Other Crude / Custom Product":
-        custom_product_name = st.text_input(
-            "Custom Product Name",
-            value=st.session_state.get("custom_product_name", ""),
-            help="Enter a custom product name if it is not listed"
+    if categories:
+        if previous_category not in categories:
+            previous_category = categories[0]
+        category_index = categories.index(previous_category) if previous_category else 0
+        product_category = st.selectbox(
+            "Product Category",
+            categories,
+            index=category_index,
+            help="Select the market pricing family (e.g. MOPAG or MOPS)"
         )
-        if custom_product_name:
-            st.session_state.custom_product_name = custom_product_name
+        st.session_state.selected_product_category = product_category
+
+        products = product_catalog.get(product_category, [])
+        previously_selected = st.session_state.get("selected_product_name", "")
+
+        if products:
+            default_index = products.index(previously_selected) if previously_selected in products else 0
+            product_selection = st.selectbox(
+                "Product",
+                products,
+                index=default_index,
+                help="Choose the product under the selected category"
+            )
+        else:
+            product_selection = st.text_input(
+                "Product",
+                value=previously_selected,
+                help="Enter product name (no predefined products for this category)"
+            )
     else:
-        st.session_state.pop("custom_product_name", None)
+        manual_category = st.text_input(
+            "Product Category",
+            value=st.session_state.get("selected_product_category", ""),
+            help="Enter a product category"
+        )
+        st.session_state.selected_product_category = manual_category
+        product_selection = st.text_input(
+            "Product",
+            value=st.session_state.get("selected_product_name", ""),
+            help="Enter product name"
+        )
 
-    product_name = custom_product_name.strip() if custom_product_name else product_selection
-    if not product_name:
-        product_name = "Custom Product"
+    if product_selection:
+        st.session_state.selected_product_name = product_selection
+    else:
+        st.session_state.selected_product_name = st.session_state.get("selected_product_name", "Custom Product")
 
-    st.session_state.selected_product_name = product_name
+    product_name = st.session_state.selected_product_name
 
     col1, col2 = st.columns(2)
 
@@ -235,7 +516,10 @@ with st.sidebar:
             'buy_price': 72.46,
             'buy_premium_discount': 0.0,
             'sale_price': 78.96,
-            'sale_premium_discount': 0.0
+            'sale_premium_discount': 0.0,
+            'sale_date': '2019-02-01',
+            'product_name': '180 CST AG MOPAG',
+            'product_category': 'MOPAG'
         }]
         st.session_state.hedge_trades = [{
             'contract': 'GASOIL Mo1',
@@ -243,14 +527,15 @@ with st.sidebar:
             'entry_price': 75.87,
             'exit_price': 81.98,
             'trade_date': '2019-01-15',
-            'status': 'Closed'
+            'status': 'Closed',
+            'exit_date': '2019-02-01'
         }]
         st.rerun()
 
 product_name = st.session_state.get("selected_product_name", "Custom Product")
 
 # Main interface - Tabs
-tab1, tab2, tab3, tab4 = st.tabs(["Trading Operations", "P&L Analysis", "Visualization", "Records View"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Trading Operations", "P&L Analysis", "Visualization", "Records View", "Market P&L"])
 
 # Trading operations tab - Combined physical trading and hedging
 with tab1:
@@ -350,7 +635,10 @@ with tab1:
                                 'buy_price': buy_price,
                                 'buy_premium_discount': buy_premium_discount,
                                 'sale_price': 0.0,  # To be filled in sell operation
-                                'sale_premium_discount': 0.0
+                                'sale_premium_discount': 0.0,
+                                'sale_date': '',
+                                'product_name': st.session_state.get('selected_product_name', ''),
+                                'product_category': st.session_state.get('selected_product_category', '')
                             }
                             st.session_state.physical_trades.append(new_trade)
                             
@@ -362,7 +650,8 @@ with tab1:
                                     'entry_price': hedge_entry_price,
                                     'exit_price': 0.0,  # To be filled in sell operation
                                     'trade_date': hedge_trade_date.strftime('%Y-%m-%d'),
-                                    'status': 'Open'
+                                    'status': 'Open',
+                                    'exit_date': ''
                                 }
                                 st.session_state.hedge_trades.append(new_hedge)
                             
@@ -404,10 +693,15 @@ with tab1:
                     df_display['Premium/Discount ($/BBL)'] = df_display['buy_premium_discount'].apply(lambda x: f"${x:.2f}")
                     df_display['Net Buy Price ($/BBL)'] = df_display['Net Buy Price'].apply(lambda x: f"${x:.2f}")
                     df_display['Status'] = "Awaiting Sale"
-                    
+                    if 'product_name' not in df_display.columns:
+                        if 'product' in df_display.columns:
+                            df_display['product_name'] = df_display['product']
+                        else:
+                            df_display['product_name'] = ''
+
                     st.dataframe(
-                        df_display[['ID', 'date', 'Quantity (MT)', 'Buy Price ($/BBL)', 'Premium/Discount ($/BBL)', 'Net Buy Price ($/BBL)', 'Status']],
-                        use_container_width=True
+                        df_display[['ID', 'date', 'product_name', 'Quantity (MT)', 'Buy Price ($/BBL)', 'Premium/Discount ($/BBL)', 'Net Buy Price ($/BBL)', 'Status']].rename(columns={'product_name': 'Product'}),
+                        width='stretch'
                     )
                 else:
                     st.info("No pending physical trades")
@@ -430,7 +724,7 @@ with tab1:
                     
                     st.dataframe(
                         df_display[['ID', 'contract', 'Trade Date', 'Volume (MT)', 'Entry Price ($/BBL)', 'Type', 'Expiry']],
-                        use_container_width=True
+                        width='stretch'
                     )
                 else:
                     st.info("No open hedge positions")
@@ -472,6 +766,7 @@ with tab1:
                 incomplete_trades = [(i, trade) for i, trade in enumerate(st.session_state.physical_trades) if trade['sale_price'] == 0.0]
                 sale_price = 0.0
                 sale_premium_discount = 0.0
+                sale_date = datetime.now().date()
                 if incomplete_trades:
                     trade_options = [f"Trade {i}: {trade['date']} - {trade['quantity']:,.0f} MT at ${trade['buy_price']:.2f}" 
                                    for i, trade in incomplete_trades]
@@ -486,7 +781,7 @@ with tab1:
 
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        sale_date = st.date_input("Sale Date", value=datetime.now().date())
+                        sale_date = st.date_input("Sale Date", value=sale_date)
                         st.write(f"Quantity: {selected_trade['quantity']:,.0f} MT")
                         st.write(f"Buy Price: ${selected_trade['buy_price']:.2f}/BBL")
                         st.write(f"Buy Premium/Discount: ${buy_premium_value:.2f}/BBL")
@@ -519,6 +814,7 @@ with tab1:
                 selected_hedge_original_idx = None
                 selected_hedge = None
                 hedge_exit_price = 0.0
+                hedge_exit_date = None
                 
                 if open_hedges:
                     # 🔧 修复：正确解构open_hedges元组
@@ -568,7 +864,15 @@ with tab1:
                                 key="hedge_exit",
                                 help="Enter the actual market price at which you want to exit this hedge position"
                             )
-                            
+
+                            default_exit_date = sale_date
+                            hedge_exit_date = st.date_input(
+                                "Hedge Exit Date",
+                                value=default_exit_date,
+                                key="hedge_exit_date_input",
+                                help="Select the date for closing this hedge position"
+                            )
+
                             # 实时显示P&L计算
                             hedge_pnl = (hedge_exit_price - selected_hedge['entry_price']) * selected_hedge['volume']
                             hedge_type = "Sell Hedge" if selected_hedge['volume'] < 0 else "Buy Hedge"
@@ -666,11 +970,14 @@ with tab1:
                             if has_physical_to_complete:
                                 st.session_state.physical_trades[selected_trade_original_idx]['sale_price'] = sale_price
                                 st.session_state.physical_trades[selected_trade_original_idx]['sale_premium_discount'] = sale_premium_discount
+                                st.session_state.physical_trades[selected_trade_original_idx]['sale_date'] = sale_date.strftime('%Y-%m-%d')
                                 operation_completed.append("Physical sale")
                             
                             # Close hedge if selected
                             if has_hedge_to_close:
+                                exit_date_value = hedge_exit_date if hedge_exit_date else sale_date
                                 st.session_state.hedge_trades[selected_hedge_original_idx]['exit_price'] = hedge_exit_price
+                                st.session_state.hedge_trades[selected_hedge_original_idx]['exit_date'] = exit_date_value.strftime('%Y-%m-%d')
                                 st.session_state.hedge_trades[selected_hedge_original_idx]['status'] = 'Closed'
                                 operation_completed.append("Hedge position closed")
                             
@@ -810,7 +1117,7 @@ with tab3:
                     title="P&L Composition",
                     height=400
                 )
-                st.plotly_chart(fig_pie, use_container_width=True)
+                st.plotly_chart(fig_pie, width='stretch')
         
         with col2:
             # P&L comparison bar chart
@@ -830,7 +1137,7 @@ with tab3:
                 yaxis_title="P&L ($)",
                 height=400
             )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width='stretch')
         
         # Time series analysis
         if len(st.session_state.physical_trades) > 1:
@@ -851,7 +1158,7 @@ with tab3:
                 markers=True
             )
             fig_line.update_layout(height=400)
-            st.plotly_chart(fig_line, use_container_width=True)
+            st.plotly_chart(fig_line, width='stretch')
     else:
         st.info("Please add trading data to view visualization charts")
 
@@ -865,6 +1172,8 @@ with tab4:
         st.markdown("#### Physical Trading Records")
         if st.session_state.physical_trades:
             df_trades = pd.DataFrame(st.session_state.physical_trades)
+            if 'product_name' not in df_trades.columns:
+                df_trades['product_name'] = ''
             
             # Add calculation columns
             df_trades['buy_premium_discount'] = df_trades.get('buy_premium_discount', 0.0)
@@ -891,8 +1200,8 @@ with tab4:
             df_display['Total P&L ($)'] = df_display['Total P&L'].apply(lambda x: f"${x:,.2f}" if x != 0 else '-')
             
             st.dataframe(
-                df_display[['date', 'Quantity (MT)', 'Buy Price ($/BBL)', 'Buy Premium/Discount ($/BBL)', 'Net Buy Price ($/BBL)', 'Sale Price ($/BBL)', 'Sale Premium/Discount ($/BBL)', 'Net Sale Price ($/BBL)', 'Unit P&L ($/BBL)', 'Total P&L ($)', 'Status']],
-                use_container_width=True
+                df_display[['date', 'product_name', 'Quantity (MT)', 'Buy Price ($/BBL)', 'Buy Premium/Discount ($/BBL)', 'Net Buy Price ($/BBL)', 'Sale Price ($/BBL)', 'Sale Premium/Discount ($/BBL)', 'Net Sale Price ($/BBL)', 'Unit P&L ($/BBL)', 'Total P&L ($)', 'Status']].rename(columns={'product_name': 'Product'}),
+                width='stretch'
             )
             
             if st.button("Clear Physical Records", key="clear_physical_records"):
@@ -936,7 +1245,7 @@ with tab4:
 
             st.dataframe(
                 df_display[['contract', 'Trade Date', 'Volume (MT)', 'Entry Price ($/BBL)', 'Exit Price ($/BBL)', 'Unit P&L ($/BBL)', 'Total P&L ($)', 'status']],
-                use_container_width=True
+                width='stretch'
             )
             
             if st.button("Clear Hedge Records", key="clear_hedge_records"):
@@ -944,6 +1253,224 @@ with tab4:
                 st.rerun()
         else:
             st.info("No hedge trading records yet.")
+
+with tab5:
+    st.markdown("### Market Prices & MTM Analysis")
+    st.markdown("Upload market prices, pick an as-of date, and review mark-to-market P&L for open physical and hedge positions.")
+
+    if 'sample_market_template_bytes' not in st.session_state:
+        sample_template = pd.DataFrame(
+            [
+                {"date": datetime(2024, 2, 1), "instrument": "180 CST AG MOPAG", "price": 75.40, "type": "Physical"},
+                {"date": datetime(2024, 2, 1), "instrument": "GASOIL Mo1", "price": 77.00, "type": "Hedge"},
+                {"date": datetime(2024, 2, 2), "instrument": "180 CST AG MOPAG", "price": 74.95, "type": "Physical"},
+                {"date": datetime(2024, 2, 2), "instrument": "GASOIL Mo1", "price": 76.25, "type": "Hedge"}
+            ]
+        )
+        sample_buffer = io.BytesIO()
+        sample_template.to_excel(sample_buffer, index=False)
+        st.session_state.sample_market_template_bytes = sample_buffer.getvalue()
+
+    sample_template_bytes = st.session_state.sample_market_template_bytes
+
+    st.download_button(
+        "Download Sample Market Price Template",
+        data=sample_template_bytes,
+        file_name="market_price_template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="download_market_template"
+    )
+
+    with st.expander("Manage Market Prices", expanded=True):
+        uploaded_file = st.file_uploader(
+            "Upload Market Prices (Excel)",
+            type=["xlsx", "xls"],
+            help="Template requires columns: date, instrument, price, optional type.",
+            key='market_price_file'
+        )
+        if uploaded_file is not None:
+            try:
+                uploaded_bytes = uploaded_file.getvalue()
+                uploaded_df = pd.read_excel(io.BytesIO(uploaded_bytes))
+                normalized_df = normalize_market_price_df(uploaded_df)
+                save_market_price_df(normalized_df)
+                st.success("Market prices uploaded successfully.")
+                st.session_state.market_price_file = None
+            except ValueError as err:
+                st.error(f"Template issue: {err}")
+            except Exception as exc:
+                st.error(f"Failed to read file: {exc}")
+
+        editor_df = get_market_price_df().drop(columns=['instrument_key'], errors='ignore')
+        if not editor_df.empty and 'instrument' in editor_df.columns:
+            editor_df['instrument'] = editor_df['instrument'].astype(str).fillna('')
+        if editor_df.empty:
+            editor_df = pd.DataFrame({
+                'date': pd.Series(dtype='datetime64[ns]'),
+                'instrument': pd.Series(dtype='string'),
+                'price': pd.Series(dtype='float'),
+                'type': pd.Series(dtype='string')
+            })
+
+        with st.form("market_price_form"):
+            editable_df = st.data_editor(
+                editor_df,
+                num_rows="dynamic",
+                width='stretch',
+                column_config={
+                    'date': st.column_config.DateColumn("Date"),
+                    'instrument': st.column_config.TextColumn("Instrument"),
+                    'price': st.column_config.NumberColumn("Market Price ($/BBL)", format="%.2f"),
+                    'type': st.column_config.TextColumn("Type")
+                },
+                hide_index=True
+            )
+            form_cols = st.columns(2)
+            save_prices = form_cols[0].form_submit_button("Save Market Prices")
+            clear_prices = form_cols[1].form_submit_button("Clear Market Prices")
+
+        if save_prices:
+            manual_df = pd.DataFrame(editable_df)
+            if not manual_df.empty and 'instrument' in manual_df.columns:
+                manual_df['instrument'] = manual_df['instrument'].astype(str).fillna('')
+            save_market_price_df(manual_df)
+            st.success("Market prices saved.")
+
+        if clear_prices:
+            st.session_state.market_prices = []
+            if 'market_price_file' in st.session_state:
+                del st.session_state.market_price_file
+            st.success("Market prices cleared.")
+
+    market_price_df = get_market_price_df()
+
+    if market_price_df.empty:
+        st.info("Add market prices to evaluate mark-to-market P&L.")
+    else:
+        default_date = st.session_state.get('valuation_date')
+        if default_date is None:
+            default_date = market_price_df['date'].max().date()
+        valuation_date = st.date_input(
+            "Valuation Date",
+            value=default_date,
+            max_value=market_price_df['date'].max().date()
+        )
+        st.session_state.valuation_date = valuation_date
+
+        pnl_snapshot = evaluate_market_pnl_for_date(
+            market_price_df,
+            st.session_state.physical_trades,
+            st.session_state.hedge_trades,
+            valuation_date
+        )
+
+        metric_cols = st.columns(3)
+        metric_cols[0].metric(
+            "Physical MTM",
+            f"${pnl_snapshot['physical_pnl']:,.2f}",
+            help=f"As of {valuation_date}" 
+        )
+        metric_cols[1].metric(
+            "Hedge MTM",
+            f"${pnl_snapshot['hedge_pnl']:,.2f}",
+            help=f"As of {valuation_date}" 
+        )
+        metric_cols[2].metric(
+            "Net MTM",
+            f"${pnl_snapshot['net_pnl']:,.2f}",
+            help=f"As of {valuation_date}" 
+        )
+
+        if pnl_snapshot['missing_instruments']:
+            st.warning(
+                "No market price found for: " + ", ".join(pnl_snapshot['missing_instruments']) +
+                f" on {valuation_date}. These exposures are excluded from MTM."
+            )
+
+        physical_details = pnl_snapshot['physical_details'].copy()
+        hedge_details = pnl_snapshot['hedge_details'].copy()
+
+        if not physical_details.empty:
+            physical_details['Market Price ($/BBL)'] = pd.to_numeric(physical_details['Market Price ($/BBL)'], errors='coerce').round(2)
+            physical_details['P&L ($)'] = pd.to_numeric(physical_details['P&L ($)'], errors='coerce').round(2)
+            st.markdown("#### Physical Position Details")
+            st.dataframe(physical_details, width='stretch')
+
+        if not hedge_details.empty:
+            hedge_details['Market Price ($/BBL)'] = pd.to_numeric(hedge_details['Market Price ($/BBL)'], errors='coerce').round(2)
+            hedge_details['P&L ($)'] = pd.to_numeric(hedge_details['P&L ($)'], errors='coerce').round(2)
+            st.markdown("#### Hedge Position Details")
+            st.dataframe(hedge_details, width='stretch')
+
+        pnl_series = calculate_market_pnl_series(
+            market_price_df,
+            st.session_state.physical_trades,
+            st.session_state.hedge_trades
+        )
+
+        chart_cols = st.columns(2)
+        with chart_cols[0]:
+            if pnl_series.empty:
+                st.info("Add additional price history to see MTM trends.")
+            else:
+                pnl_fig = go.Figure()
+                pnl_fig.add_trace(go.Scatter(
+                    x=pnl_series['date'],
+                    y=pnl_series['physical_pnl'],
+                    mode='lines+markers',
+                    name='Physical MTM'
+                ))
+                pnl_fig.add_trace(go.Scatter(
+                    x=pnl_series['date'],
+                    y=pnl_series['hedge_pnl'],
+                    mode='lines+markers',
+                    name='Hedge MTM'
+                ))
+                pnl_fig.add_trace(go.Scatter(
+                    x=pnl_series['date'],
+                    y=pnl_series['net_pnl'],
+                    mode='lines+markers',
+                    name='Net MTM'
+                ))
+                pnl_fig.update_layout(
+                    title='MTM History',
+                    xaxis_title='Date',
+                    yaxis_title='P&L ($)',
+                    hovermode='x unified',
+                    legend_title='Category',
+                    height=400
+                )
+                st.plotly_chart(pnl_fig, width='stretch')
+
+        with chart_cols[1]:
+            relevant_instruments = set(physical_details['Instrument'].dropna().tolist()) | set(hedge_details['Instrument'].dropna().tolist())
+            price_history = build_price_history(market_price_df, relevant_instruments)
+            if price_history.empty:
+                st.info("Upload price history for relevant instruments to view price trends.")
+            else:
+                price_fig = go.Figure()
+                for column in price_history.columns:
+                    if column == 'date':
+                        continue
+                    price_fig.add_trace(go.Scatter(
+                        x=price_history['date'],
+                        y=price_history[column],
+                        mode='lines+markers',
+                        name=column
+                    ))
+                price_fig.update_layout(
+                    title='Instrument Price History',
+                    xaxis_title='Date',
+                    yaxis_title='Price ($/BBL)',
+                    hovermode='x unified',
+                    height=400
+                )
+                st.plotly_chart(price_fig, width='stretch')
+
+        with st.expander("Raw Market Price Data", expanded=False):
+            display_prices = market_price_df.drop(columns=['instrument_key'], errors='ignore').copy()
+            display_prices['date'] = display_prices['date'].dt.strftime('%Y-%m-%d')
+            st.dataframe(display_prices, width='stretch')
 
 # Footer
 st.markdown("---")
