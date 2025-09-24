@@ -130,3 +130,4 @@ Test failures indicate potential calculation logic errors that could affect busi
 ## Excel Reference
 
 The original Excel file contains the reference implementation for all calculations. The `analyze_excel.py` utility helps debug discrepancies between Python and Excel results. The system maintains calculation compatibility while providing a modern web interface.
+- 不要在message中显示claude
