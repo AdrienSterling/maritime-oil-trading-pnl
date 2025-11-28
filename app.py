@@ -81,14 +81,25 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         text-align: center;
     }
-    
+
+    .metric-card h3 {
+        color: #1f2937;
+        margin: 0.5rem 0;
+    }
+
+    .metric-card h4 {
+        color: #4b5563;
+        margin: 0;
+        font-weight: 500;
+    }
+
     .profit-positive {
-        color: #059669;
+        color: #059669 !important;
         font-weight: bold;
     }
-    
+
     .profit-negative {
-        color: #dc2626;
+        color: #dc2626 !important;
         font-weight: bold;
     }
     
