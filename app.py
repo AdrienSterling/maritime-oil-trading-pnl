@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from pathlib import Path
 import io
+import json
 
 
 # Page configuration
@@ -503,34 +504,210 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### Quick Actions")
-    
+
     if st.button("Reset All Data"):
         st.session_state.physical_trades = []
         st.session_state.hedge_trades = []
+        st.session_state.market_prices = []
         st.rerun()
-    
-    if st.button("Load Sample Data"):
-        st.session_state.physical_trades = [{
-            'date': '2019-01-15',
-            'quantity': 245778,
-            'buy_price': 72.46,
-            'buy_premium_discount': 0.0,
-            'sale_price': 78.96,
-            'sale_premium_discount': 0.0,
-            'sale_date': '2019-02-01',
-            'product_name': '180 CST AG MOPAG',
-            'product_category': 'MOPAG'
-        }]
-        st.session_state.hedge_trades = [{
-            'contract': 'GASOIL Mo1',
-            'volume': -245778,
-            'entry_price': 75.87,
-            'exit_price': 81.98,
-            'trade_date': '2019-01-15',
-            'status': 'Closed',
-            'exit_date': '2019-02-01'
-        }]
-        st.rerun()
+
+    # Demo data presets
+    st.markdown("**Load Demo Data:**")
+    demo_preset = st.selectbox(
+        "Select Demo Scenario",
+        ["-- Select --", "GO-KAKI STAR (Completed)", "FO Cargo (Open Position)", "Multi-Trade Portfolio"],
+        key="demo_preset_selector",
+        label_visibility="collapsed"
+    )
+
+    if st.button("Load Selected Demo"):
+        if demo_preset == "GO-KAKI STAR (Completed)":
+            st.session_state.physical_trades = [{
+                'date': '2019-01-15',
+                'quantity': 245778,
+                'buy_price': 72.46,
+                'buy_premium_discount': 0.0,
+                'sale_price': 78.96,
+                'sale_premium_discount': 0.0,
+                'sale_date': '2019-02-01',
+                'product_name': '180 CST AG MOPAG',
+                'product_category': 'MOPAG'
+            }]
+            st.session_state.hedge_trades = [{
+                'contract': 'GASOIL Mo1',
+                'volume': -245778,
+                'entry_price': 75.87,
+                'exit_price': 81.98,
+                'trade_date': '2019-01-15',
+                'status': 'Closed',
+                'exit_date': '2019-02-01'
+            }]
+            st.rerun()
+        elif demo_preset == "FO Cargo (Open Position)":
+            st.session_state.physical_trades = [{
+                'date': '2024-03-01',
+                'quantity': 150000,
+                'buy_price': 68.50,
+                'buy_premium_discount': -1.25,
+                'sale_price': 0.0,
+                'sale_premium_discount': 0.0,
+                'sale_date': '',
+                'product_name': '380 CST AG MOPAG',
+                'product_category': 'MOPAG'
+            }]
+            st.session_state.hedge_trades = [{
+                'contract': 'GASOIL Mo2',
+                'volume': -150000,
+                'entry_price': 71.20,
+                'exit_price': 0.0,
+                'trade_date': '2024-03-01',
+                'status': 'Open',
+                'exit_date': ''
+            }]
+            st.rerun()
+        elif demo_preset == "Multi-Trade Portfolio":
+            st.session_state.physical_trades = [
+                {
+                    'date': '2024-01-10',
+                    'quantity': 100000,
+                    'buy_price': 70.00,
+                    'buy_premium_discount': 0.50,
+                    'sale_price': 74.50,
+                    'sale_premium_discount': 0.25,
+                    'sale_date': '2024-01-25',
+                    'product_name': 'GASOIL 500PPM MOPAG',
+                    'product_category': 'MOPAG'
+                },
+                {
+                    'date': '2024-02-01',
+                    'quantity': 200000,
+                    'buy_price': 72.00,
+                    'buy_premium_discount': -0.50,
+                    'sale_price': 75.00,
+                    'sale_premium_discount': 0.0,
+                    'sale_date': '2024-02-15',
+                    'product_name': 'GASOIL 500PPM MOPAG',
+                    'product_category': 'MOPAG'
+                },
+                {
+                    'date': '2024-02-20',
+                    'quantity': 180000,
+                    'buy_price': 69.00,
+                    'buy_premium_discount': 0.0,
+                    'sale_price': 0.0,
+                    'sale_premium_discount': 0.0,
+                    'sale_date': '',
+                    'product_name': '180 CST AG MOPAG',
+                    'product_category': 'MOPAG'
+                }
+            ]
+            st.session_state.hedge_trades = [
+                {
+                    'contract': 'GASOIL Mo1',
+                    'volume': -100000,
+                    'entry_price': 72.50,
+                    'exit_price': 76.00,
+                    'trade_date': '2024-01-10',
+                    'status': 'Closed',
+                    'exit_date': '2024-01-25'
+                },
+                {
+                    'contract': 'GASOIL Mo1',
+                    'volume': -200000,
+                    'entry_price': 74.00,
+                    'exit_price': 77.50,
+                    'trade_date': '2024-02-01',
+                    'status': 'Closed',
+                    'exit_date': '2024-02-15'
+                },
+                {
+                    'contract': 'GASOIL Mo2',
+                    'volume': -180000,
+                    'entry_price': 71.00,
+                    'exit_price': 0.0,
+                    'trade_date': '2024-02-20',
+                    'status': 'Open',
+                    'exit_date': ''
+                }
+            ]
+            st.rerun()
+        else:
+            st.warning("Please select a demo scenario first.")
+
+    st.markdown("---")
+    st.markdown("### Data Import/Export")
+
+    # Export to Excel
+    if st.session_state.physical_trades or st.session_state.hedge_trades or st.session_state.market_prices:
+        export_buffer = io.BytesIO()
+        with pd.ExcelWriter(export_buffer, engine='openpyxl') as writer:
+            # Physical trades
+            if st.session_state.physical_trades:
+                pd.DataFrame(st.session_state.physical_trades).to_excel(
+                    writer, sheet_name='Physical_Trades', index=False
+                )
+            # Hedge trades
+            if st.session_state.hedge_trades:
+                pd.DataFrame(st.session_state.hedge_trades).to_excel(
+                    writer, sheet_name='Hedge_Trades', index=False
+                )
+            # Market prices
+            if st.session_state.market_prices:
+                pd.DataFrame(st.session_state.market_prices).to_excel(
+                    writer, sheet_name='Market_Prices', index=False
+                )
+            # Metadata
+            metadata = pd.DataFrame([{
+                'cargo_name': cargo_name,
+                'delivery_point': delivery_point,
+                'product_category': st.session_state.get('selected_product_category', ''),
+                'product_name': st.session_state.get('selected_product_name', ''),
+                'export_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }])
+            metadata.to_excel(writer, sheet_name='Metadata', index=False)
+
+        export_buffer.seek(0)
+        st.download_button(
+            label="Export All Data (Excel)",
+            data=export_buffer.getvalue(),
+            file_name=f"trading_data_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("No data to export")
+
+    # Import from Excel
+    uploaded_data = st.file_uploader(
+        "Import Data (Excel)",
+        type=['xlsx', 'xls'],
+        key='import_data_file',
+        help="Upload previously exported Excel file to restore data"
+    )
+
+    if uploaded_data is not None:
+        if st.button("Confirm Import"):
+            try:
+                excel_data = pd.ExcelFile(io.BytesIO(uploaded_data.getvalue()))
+
+                # Import physical trades
+                if 'Physical_Trades' in excel_data.sheet_names:
+                    df_physical = pd.read_excel(excel_data, sheet_name='Physical_Trades')
+                    st.session_state.physical_trades = df_physical.to_dict(orient='records')
+
+                # Import hedge trades
+                if 'Hedge_Trades' in excel_data.sheet_names:
+                    df_hedge = pd.read_excel(excel_data, sheet_name='Hedge_Trades')
+                    st.session_state.hedge_trades = df_hedge.to_dict(orient='records')
+
+                # Import market prices
+                if 'Market_Prices' in excel_data.sheet_names:
+                    df_market = pd.read_excel(excel_data, sheet_name='Market_Prices')
+                    st.session_state.market_prices = df_market.to_dict(orient='records')
+
+                st.success("Data imported successfully!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Import failed: {str(e)}")
 
 product_name = st.session_state.get("selected_product_name", "Custom Product")
 
