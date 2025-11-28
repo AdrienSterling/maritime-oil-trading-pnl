@@ -1294,7 +1294,7 @@ with tab3:
                     title="P&L Composition",
                     height=400
                 )
-                st.plotly_chart(fig_pie, width='stretch')
+                st.plotly_chart(fig_pie, use_container_width=True)
         
         with col2:
             # P&L comparison bar chart
@@ -1314,7 +1314,7 @@ with tab3:
                 yaxis_title="P&L ($)",
                 height=400
             )
-            st.plotly_chart(fig_bar, width='stretch')
+            st.plotly_chart(fig_bar, use_container_width=True)
         
         # Time series analysis
         if len(st.session_state.physical_trades) > 1:
@@ -1335,7 +1335,7 @@ with tab3:
                 markers=True
             )
             fig_line.update_layout(height=400)
-            st.plotly_chart(fig_line, width='stretch')
+            st.plotly_chart(fig_line, use_container_width=True)
     else:
         st.info("Please add trading data to view visualization charts")
 
@@ -1617,7 +1617,7 @@ with tab5:
                     legend_title='Category',
                     height=400
                 )
-                st.plotly_chart(pnl_fig, width='stretch')
+                st.plotly_chart(pnl_fig, use_container_width=True)
 
         with chart_cols[1]:
             relevant_instruments = set(physical_details['Instrument'].dropna().tolist()) | set(hedge_details['Instrument'].dropna().tolist())
@@ -1642,7 +1642,7 @@ with tab5:
                     hovermode='x unified',
                     height=400
                 )
-                st.plotly_chart(price_fig, width='stretch')
+                st.plotly_chart(price_fig, use_container_width=True)
 
         with st.expander("Raw Market Price Data", expanded=False):
             display_prices = market_price_df.drop(columns=['instrument_key'], errors='ignore').copy()
