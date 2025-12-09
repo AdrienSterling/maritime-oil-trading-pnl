@@ -1,0 +1,18 @@
+[theme]
+# Primary accent color - ABCD Teck green
+primaryColor = "#4a9d4e"
+
+# Background color for the main content area
+backgroundColor = "#ffffff"
+
+# Background color for sidebar and secondary areas
+secondaryBackgroundColor = "#f8fafc"
+
+# Color for text and icons
+textColor = "#1f2937"
+
+# Font family
+font = "sans serif"
+
+[server]
+headless = true

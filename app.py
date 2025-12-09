@@ -46,7 +46,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 自定义CSS样式 - Professional Business Theme
+# 自定义CSS样式 - Light Professional Business Theme
 st.markdown("""
 <style>
     /* Import professional font */
@@ -55,22 +55,22 @@ st.markdown("""
     /* Global styling */
     .stApp {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background-color: #ffffff;
     }
 
-    /* Professional Header */
+    /* Light Professional Header */
     .main-header {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-        padding: 1.5rem 2rem;
-        border-radius: 0;
-        margin: -1rem -1rem 2rem -1rem;
-        border-bottom: 3px solid #4a9d4e;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        background: #ffffff;
+        padding: 1.25rem 2rem;
+        margin: -1rem -1rem 1.5rem -1rem;
+        border-bottom: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
     .header-container {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-start;
         max-width: 1400px;
         margin: 0 auto;
     }
@@ -78,82 +78,74 @@ st.markdown("""
     .header-left {
         display: flex;
         align-items: center;
-        gap: 20px;
+        gap: 16px;
     }
 
-    .header-logo {
-        height: 50px;
-        width: auto;
+    .header-divider {
+        width: 1px;
+        height: 40px;
+        background: #e5e7eb;
+        margin: 0 16px;
     }
 
     .header-title {
-        color: #ffffff;
-        font-size: 1.6rem;
+        color: #1f2937;
+        font-size: 1.5rem;
         font-weight: 600;
         margin: 0;
-        letter-spacing: -0.5px;
+        letter-spacing: -0.3px;
     }
 
     .header-subtitle {
-        color: #94a3b8;
-        font-size: 0.85rem;
+        color: #6b7280;
+        font-size: 0.8rem;
         font-weight: 400;
-        margin: 0;
-        letter-spacing: 0.5px;
+        margin: 4px 0 0 0;
     }
 
-    .header-right {
-        text-align: right;
+    /* Main Content Area */
+    .block-container {
+        padding-top: 1rem;
     }
 
-    .header-company {
-        color: #4a9d4e;
-        font-size: 0.9rem;
-        font-weight: 600;
-        letter-spacing: 1px;
-    }
-
-    /* Input Section - Professional Yellow */
+    /* Input Section */
     .input-section {
-        background: linear-gradient(180deg, #fffef5 0%, #fffbeb 100%);
-        border: 1px solid #e5e0c8;
-        border-left: 4px solid #d4a853;
-        border-radius: 4px;
+        background: #fafafa;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
         padding: 1.25rem;
         margin-bottom: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
-    /* Result Section - Professional Blue */
+    /* Result Section */
     .result-section {
-        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        background: #f8fafc;
         border: 1px solid #e2e8f0;
-        border-left: 4px solid #3b82f6;
-        border-radius: 4px;
+        border-radius: 8px;
         padding: 1.25rem;
         margin-bottom: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
     /* Professional Metric Cards */
     .metric-card {
         background: #ffffff;
-        padding: 1.25rem;
-        border-radius: 6px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+        padding: 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
         text-align: center;
         border: 1px solid #e5e7eb;
-        transition: box-shadow 0.2s ease;
+        transition: all 0.2s ease;
     }
 
     .metric-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border-color: #d1d5db;
     }
 
     .metric-card h3 {
         color: #111827;
         margin: 0.5rem 0;
-        font-size: 1.5rem;
+        font-size: 1.6rem;
         font-weight: 600;
     }
 
@@ -161,14 +153,14 @@ st.markdown("""
         color: #6b7280;
         margin: 0;
         font-weight: 500;
-        font-size: 0.875rem;
+        font-size: 0.75rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
 
     .metric-card p {
-        color: #6b7280;
-        font-size: 0.8rem;
+        color: #9ca3af;
+        font-size: 0.75rem;
         margin: 0.25rem 0 0 0;
     }
 
@@ -183,100 +175,155 @@ st.markdown("""
         font-weight: 700;
     }
 
-    /* Section Headers */
-    .section-header {
-        font-size: 1.1rem;
+    /* Section Headers in markdown */
+    .stMarkdown h3 {
+        color: #374151;
+        font-size: 1rem;
         font-weight: 600;
-        color: #1f2937;
-        border-bottom: 2px solid #e5e7eb;
-        padding-bottom: 0.5rem;
+        margin-top: 1.5rem;
         margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #e5e7eb;
     }
 
     /* Sidebar Styling */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-        border-right: 1px solid #e2e8f0;
+        background: #fafafa;
+        border-right: 1px solid #e5e7eb;
+    }
+
+    section[data-testid="stSidebar"] > div {
+        padding-top: 1rem;
     }
 
     section[data-testid="stSidebar"] .stMarkdown h3 {
         color: #374151;
-        font-size: 0.9rem;
+        font-size: 0.8rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-top: 1rem;
+        margin-top: 1.5rem;
+        margin-bottom: 0.75rem;
+        border-bottom: none;
     }
 
     /* Tab Styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #f8fafc;
-        padding: 0.5rem;
-        border-radius: 8px;
-        border: 1px solid #e2e8f0;
+        gap: 0;
+        background-color: transparent;
+        padding: 0;
+        border-bottom: 1px solid #e5e7eb;
+        border-radius: 0;
     }
 
     .stTabs [data-baseweb="tab"] {
         background-color: transparent;
-        border-radius: 6px;
-        color: #64748b;
+        border-radius: 0;
+        color: #6b7280;
         font-weight: 500;
-        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        padding: 0.75rem 1.25rem;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #374151;
     }
 
     .stTabs [aria-selected="true"] {
-        background-color: #ffffff !important;
-        color: #1e40af !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        background-color: transparent !important;
+        color: #4a9d4e !important;
+        border-bottom: 2px solid #4a9d4e !important;
+        box-shadow: none;
     }
 
     /* Button Styling */
     .stButton > button {
-        background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+        background: #ffffff;
         border: 1px solid #d1d5db;
         color: #374151;
         font-weight: 500;
+        font-size: 0.875rem;
         border-radius: 6px;
         padding: 0.5rem 1rem;
-        transition: all 0.2s ease;
+        transition: all 0.15s ease;
     }
 
     .stButton > button:hover {
-        background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+        background: #f9fafb;
         border-color: #9ca3af;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
 
+    .stButton > button:active {
+        background: #f3f4f6;
+    }
+
+    /* Primary Button - Green accent */
     .stButton > button[kind="primary"] {
-        background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-        border: none;
+        background: #4a9d4e;
+        border: 1px solid #4a9d4e;
         color: white;
     }
 
     .stButton > button[kind="primary"]:hover {
-        background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%);
+        background: #3d8b40;
+        border-color: #3d8b40;
+    }
+
+    /* Form inputs */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stSelectbox > div > div > div {
+        border-radius: 6px;
+        border: 1px solid #d1d5db;
+        font-size: 0.875rem;
+    }
+
+    .stTextInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus {
+        border-color: #4a9d4e;
+        box-shadow: 0 0 0 1px #4a9d4e;
     }
 
     /* DataFrames */
     .stDataFrame {
         border: 1px solid #e5e7eb;
-        border-radius: 6px;
+        border-radius: 8px;
         overflow: hidden;
+    }
+
+    [data-testid="stDataFrame"] > div {
+        border-radius: 8px;
+    }
+
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: #fafafa;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 0.875rem;
+    }
+
+    /* Info/Warning/Error boxes */
+    .stAlert {
+        border-radius: 6px;
+        font-size: 0.875rem;
     }
 
     /* Footer */
     .footer {
         text-align: center;
-        padding: 1.5rem;
+        padding: 2rem 1rem;
         color: #6b7280;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         border-top: 1px solid #e5e7eb;
-        margin-top: 2rem;
+        margin-top: 3rem;
+        background: #fafafa;
     }
 
     .footer a {
-        color: #2563eb;
+        color: #4a9d4e;
         text-decoration: none;
         font-weight: 500;
     }
@@ -285,24 +332,38 @@ st.markdown("""
         text-decoration: underline;
     }
 
+    /* Metrics styling */
+    [data-testid="stMetric"] {
+        background: #ffffff;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+    }
+
+    [data-testid="stMetricLabel"] {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
     /* Mobile Responsive */
     @media (max-width: 768px) {
-        .header-container {
-            flex-direction: column;
-            text-align: center;
-            gap: 1rem;
+        .main-header {
+            padding: 1rem;
         }
 
-        .header-left {
+        .header-container {
             flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .header-divider {
+            display: none;
         }
 
         .header-title {
             font-size: 1.25rem;
-        }
-
-        .header-right {
-            text-align: center;
         }
     }
 </style>
@@ -1887,7 +1948,7 @@ st.markdown(f"""
 <div class="footer">
     <div style="margin-bottom: 0.5rem;">
         {footer_logo_html}
-        <span style="font-weight: 600; color: #374151;">Maritime Oil Trading P&L Analysis System</span>
+        <span style="font-weight: 600; color: #374151;">Oil Trading P&L Analysis System</span>
     </div>
     <div>
         <a href="https://www.abcdteck.com" target="_blank">ABCD Teck</a>
