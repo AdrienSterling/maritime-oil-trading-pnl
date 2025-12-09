@@ -13,6 +13,10 @@ import json
 
 BASE_DIR = Path(__file__).resolve().parent
 
+# Logo paths
+LOGO_PATH = BASE_DIR / "logo.png"
+FAVICON_PATH = BASE_DIR / "favicon.png"
+
 PLATTS_PRODUCT_CATALOG = {
     'MOPAG': [
         '180 CST AG MOPAG',
@@ -36,87 +40,322 @@ PLATTS_PRODUCT_CATALOG = {
 
 # Page configuration
 st.set_page_config(
-    page_title="Maritime Oil Trading P&L Analysis System",
-    page_icon="",
+    page_title="Oil Trading P&L Analysis",
+    page_icon=str(FAVICON_PATH) if FAVICON_PATH.exists() else "📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 自定义CSS样式
+# 自定义CSS样式 - Professional Business Theme
 st.markdown("""
 <style>
+    /* Import professional font */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    /* Global styling */
+    .stApp {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* Professional Header */
     .main-header {
-        background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        margin-bottom: 2rem;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        padding: 1.5rem 2rem;
+        border-radius: 0;
+        margin: -1rem -1rem 2rem -1rem;
+        border-bottom: 3px solid #4a9d4e;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     }
-    .main-header h1 {
-        color: white;
-        text-align: center;
+
+    .header-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .header-logo {
+        height: 50px;
+        width: auto;
+    }
+
+    .header-title {
+        color: #ffffff;
+        font-size: 1.6rem;
+        font-weight: 600;
         margin: 0;
-        font-size: 2rem;
+        letter-spacing: -0.5px;
     }
-    
+
+    .header-subtitle {
+        color: #94a3b8;
+        font-size: 0.85rem;
+        font-weight: 400;
+        margin: 0;
+        letter-spacing: 0.5px;
+    }
+
+    .header-right {
+        text-align: right;
+    }
+
+    .header-company {
+        color: #4a9d4e;
+        font-size: 0.9rem;
+        font-weight: 600;
+        letter-spacing: 1px;
+    }
+
+    /* Input Section - Professional Yellow */
     .input-section {
-        background-color: #fffbeb;
-        border: 2px solid #fbbf24;
-        border-radius: 10px;
-        padding: 1rem;
+        background: linear-gradient(180deg, #fffef5 0%, #fffbeb 100%);
+        border: 1px solid #e5e0c8;
+        border-left: 4px solid #d4a853;
+        border-radius: 4px;
+        padding: 1.25rem;
         margin-bottom: 1rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    
+
+    /* Result Section - Professional Blue */
     .result-section {
-        background-color: #eff6ff;
-        border: 2px solid #3b82f6;
-        border-radius: 10px;
-        padding: 1rem;
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 1px solid #e2e8f0;
+        border-left: 4px solid #3b82f6;
+        border-radius: 4px;
+        padding: 1.25rem;
         margin-bottom: 1rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
-    
+
+    /* Professional Metric Cards */
     .metric-card {
-        background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        background: #ffffff;
+        padding: 1.25rem;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
         text-align: center;
+        border: 1px solid #e5e7eb;
+        transition: box-shadow 0.2s ease;
+    }
+
+    .metric-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
 
     .metric-card h3 {
-        color: #1f2937;
+        color: #111827;
         margin: 0.5rem 0;
+        font-size: 1.5rem;
+        font-weight: 600;
     }
 
     .metric-card h4 {
-        color: #4b5563;
+        color: #6b7280;
         margin: 0;
         font-weight: 500;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
+    .metric-card p {
+        color: #6b7280;
+        font-size: 0.8rem;
+        margin: 0.25rem 0 0 0;
+    }
+
+    /* P&L Colors */
     .profit-positive {
         color: #059669 !important;
-        font-weight: bold;
+        font-weight: 700;
     }
 
     .profit-negative {
         color: #dc2626 !important;
-        font-weight: bold;
+        font-weight: 700;
     }
-    
+
+    /* Section Headers */
+    .section-header {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1f2937;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+        border-right: 1px solid #e2e8f0;
+    }
+
+    section[data-testid="stSidebar"] .stMarkdown h3 {
+        color: #374151;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 1rem;
+    }
+
+    /* Tab Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #f8fafc;
+        padding: 0.5rem;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent;
+        border-radius: 6px;
+        color: #64748b;
+        font-weight: 500;
+        padding: 0.5rem 1rem;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background-color: #ffffff !important;
+        color: #1e40af !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Button Styling */
+    .stButton > button {
+        background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+        border: 1px solid #d1d5db;
+        color: #374151;
+        font-weight: 500;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s ease;
+    }
+
+    .stButton > button:hover {
+        background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+        border-color: #9ca3af;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+        border: none;
+        color: white;
+    }
+
+    .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%);
+    }
+
+    /* DataFrames */
+    .stDataFrame {
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 1.5rem;
+        color: #6b7280;
+        font-size: 0.85rem;
+        border-top: 1px solid #e5e7eb;
+        margin-top: 2rem;
+    }
+
+    .footer a {
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .footer a:hover {
+        text-decoration: underline;
+    }
+
+    /* Mobile Responsive */
     @media (max-width: 768px) {
-        .main-header h1 {
-            font-size: 1.5rem;
+        .header-container {
+            flex-direction: column;
+            text-align: center;
+            gap: 1rem;
+        }
+
+        .header-left {
+            flex-direction: column;
+        }
+
+        .header-title {
+            font-size: 1.25rem;
+        }
+
+        .header-right {
+            text-align: center;
         }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Main header
-st.markdown("""
-<div class="main-header">
-    <h1>Maritime Oil Trading P&L Analysis System</h1>
-</div>
-""", unsafe_allow_html=True)
+# Main header with logo
+import base64
+
+def get_base64_image(image_path):
+    """Convert image to base64 for embedding in HTML"""
+    try:
+        with open(image_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        return None
+
+logo_base64 = get_base64_image(LOGO_PATH) if LOGO_PATH.exists() else None
+
+if logo_base64:
+    header_html = f"""
+    <div class="main-header">
+        <div class="header-container">
+            <div class="header-left">
+                <img src="data:image/png;base64,{logo_base64}" class="header-logo" alt="ABCD Teck Logo">
+                <div>
+                    <h1 class="header-title">Maritime Oil Trading P&L Analysis</h1>
+                    <p class="header-subtitle">Professional Risk Management & Trading Analytics Platform</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="header-company">CL RISK CONSULTING</span>
+            </div>
+        </div>
+    </div>
+    """
+else:
+    header_html = """
+    <div class="main-header">
+        <div class="header-container">
+            <div class="header-left">
+                <div>
+                    <h1 class="header-title">Maritime Oil Trading P&L Analysis</h1>
+                    <p class="header-subtitle">Professional Risk Management & Trading Analytics Platform</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="header-company">ABCD TECK | CL RISK CONSULTING</span>
+            </div>
+        </div>
+    </div>
+    """
+
+st.markdown(header_html, unsafe_allow_html=True)
 
 # Calculation functions
 def calculate_pnl(physical_trades, hedge_trades):
@@ -426,8 +665,16 @@ if 'selected_product_name' not in st.session_state:
 
 # Sidebar - Basic Information
 with st.sidebar:
-    st.markdown("### Basic Information")
-    
+    # Sidebar logo
+    if logo_base64:
+        st.markdown(f"""
+        <div style="text-align: center; padding: 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid #e2e8f0;">
+            <img src="data:image/png;base64,{logo_base64}" style="height: 40px; width: auto;" alt="ABCD Teck">
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("### Cargo Information")
+
     cargo_name = st.text_input(
         "Cargo Name",
         value="GO-KAKI STAR 0.5%",
@@ -1661,12 +1908,22 @@ with tab5:
             st.dataframe(display_prices, width='stretch')
 
 # Footer
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #6b7280;'>"
-    "Maritime Oil Trading P&L Analysis System | "
-    "<a href='https://www.abcdteck.com' target='_blank' style='color: #3b82f6; text-decoration: none;'>ABCD Teck</a> | "
-    "CL Risk Consulting"
-    "</div>",
-    unsafe_allow_html=True
-)
+footer_logo_html = ""
+if logo_base64:
+    footer_logo_html = f'<img src="data:image/png;base64,{logo_base64}" style="height: 24px; width: auto; vertical-align: middle; margin-right: 8px;" alt="ABCD Teck">'
+
+st.markdown(f"""
+<div class="footer">
+    <div style="margin-bottom: 0.5rem;">
+        {footer_logo_html}
+        <span style="font-weight: 600; color: #374151;">Maritime Oil Trading P&L Analysis System</span>
+    </div>
+    <div>
+        <a href="https://www.abcdteck.com" target="_blank">ABCD Teck</a>
+        <span style="margin: 0 0.5rem; color: #d1d5db;">|</span>
+        <span>CL Risk Consulting</span>
+        <span style="margin: 0 0.5rem; color: #d1d5db;">|</span>
+        <span style="color: #9ca3af;">Professional Risk Management Solutions</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
