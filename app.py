@@ -321,39 +321,18 @@ def get_base64_image(image_path):
 
 logo_base64 = get_base64_image(LOGO_PATH) if LOGO_PATH.exists() else None
 
-if logo_base64:
-    header_html = f"""
-    <div class="main-header">
-        <div class="header-container">
-            <div class="header-left">
-                <img src="data:image/png;base64,{logo_base64}" class="header-logo" alt="ABCD Teck Logo">
-                <div>
-                    <h1 class="header-title">Maritime Oil Trading P&L Analysis</h1>
-                    <p class="header-subtitle">Professional Risk Management & Trading Analytics Platform</p>
-                </div>
-            </div>
-            <div class="header-right">
-                <span class="header-company">CL RISK CONSULTING</span>
+header_html = """
+<div class="main-header">
+    <div class="header-container">
+        <div class="header-left">
+            <div>
+                <h1 class="header-title">Maritime Oil Trading P&L Analysis</h1>
+                <p class="header-subtitle">Professional Risk Management & Trading Analytics Platform</p>
             </div>
         </div>
     </div>
-    """
-else:
-    header_html = """
-    <div class="main-header">
-        <div class="header-container">
-            <div class="header-left">
-                <div>
-                    <h1 class="header-title">Maritime Oil Trading P&L Analysis</h1>
-                    <p class="header-subtitle">Professional Risk Management & Trading Analytics Platform</p>
-                </div>
-            </div>
-            <div class="header-right">
-                <span class="header-company">ABCD TECK | CL RISK CONSULTING</span>
-            </div>
-        </div>
-    </div>
-    """
+</div>
+"""
 
 st.markdown(header_html, unsafe_allow_html=True)
 
@@ -665,14 +644,6 @@ if 'selected_product_name' not in st.session_state:
 
 # Sidebar - Basic Information
 with st.sidebar:
-    # Sidebar logo
-    if logo_base64:
-        st.markdown(f"""
-        <div style="text-align: center; padding: 1rem 0; margin-bottom: 1rem; border-bottom: 1px solid #e2e8f0;">
-            <img src="data:image/png;base64,{logo_base64}" style="height: 40px; width: auto;" alt="ABCD Teck">
-        </div>
-        """, unsafe_allow_html=True)
-
     st.markdown("### Cargo Information")
 
     cargo_name = st.text_input(
