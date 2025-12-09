@@ -326,7 +326,7 @@ header_html = """
     <div class="header-container">
         <div class="header-left">
             <div>
-                <h1 class="header-title">Maritime Oil Trading P&L Analysis</h1>
+                <h1 class="header-title">Oil Trading P&L Analysis</h1>
                 <p class="header-subtitle">Professional Risk Management & Trading Analytics Platform</p>
             </div>
         </div>
